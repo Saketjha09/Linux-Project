@@ -2,11 +2,21 @@ var express = require('express'),
     async = require('async'),
     { Pool } = require('pg'),
     cookieParser = require('cookie-parser'),
+    path = require('path'),
     app = express(),
     server = require('http').Server(app),
     io = require('socket.io')(server);
 
-var port = process.env.PORT || 4000;
+var port = process.env.RESULT_PORT || process.env.PORT || 4000;
+
+// Database Configuration from environment
+var dbHost = process.env.DB_HOST || 'db';
+var dbPort = process.env.DB_PORT || 5432;
+var dbName = process.env.DB_NAME || 'postgres';
+var dbUser = process.env.POSTGRES_USER || 'postgres';
+var dbPassword = process.env.POSTGRES_PASSWORD || 'postgres';
+
+var connectionString = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
 
 io.on('connection', function (socket) {
 
@@ -18,7 +28,7 @@ io.on('connection', function (socket) {
 });
 
 var pool = new Pool({
-  connectionString: 'postgres://postgres:postgres@db/postgres'
+  connectionString: connectionString
 });
 
 async.retry(
@@ -41,16 +51,50 @@ async.retry(
 );
 
 function getVotes(client) {
-  client.query('SELECT vote, COUNT(id) AS count FROM votes GROUP BY vote', [], function(err, result) {
+  // Get all competitions with their vote counts
+  client.query(`
+    SELECT 
+      c.id,
+      c.name,
+      c.description,
+      c.option_a,
+      c.option_b,
+      c.status,
+      COUNT(CASE WHEN v.vote = 'a' THEN 1 END) as votes_a,
+      COUNT(CASE WHEN v.vote = 'b' THEN 1 END) as votes_b
+    FROM competitions c
+    LEFT JOIN votes v ON c.id = v.competition_id
+    GROUP BY c.id, c.name, c.description, c.option_a, c.option_b, c.status
+    ORDER BY c.created_at DESC
+  `, [], function(err, result) {
     if (err) {
       console.error("Error performing query: " + err);
     } else {
-      var votes = collectVotesFromResult(result);
-      io.sockets.emit("scores", JSON.stringify(votes));
+      var competitions = formatCompetitions(result);
+      io.sockets.emit("scores", JSON.stringify(competitions));
     }
 
     setTimeout(function() {getVotes(client) }, 1000);
   });
+}
+
+function formatCompetitions(result) {
+  var competitions = [];
+
+  result.rows.forEach(function (row) {
+    competitions.push({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      option_a: row.option_a,
+      option_b: row.option_b,
+      status: row.status,
+      a: parseInt(row.votes_a || 0),
+      b: parseInt(row.votes_b || 0)
+    });
+  });
+
+  return competitions;
 }
 
 function collectVotesFromResult(result) {
@@ -69,6 +113,46 @@ app.use(express.static(__dirname + '/views'));
 
 app.get('/', function (req, res) {
   res.sendFile(path.resolve(__dirname + '/views/index.html'));
+});
+
+app.get('/health', function (_req, res) {
+  res.json({ status: 'ok' });
+});
+
+app.get('/ready', async function (_req, res) {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ready' });
+  } catch (err) {
+    console.error('Readiness check failed', err);
+    res.status(503).json({ status: 'error', reason: 'db_unavailable' });
+  }
+});
+
+app.get('/api/scores', async function (_req, res) {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        c.id,
+        c.name,
+        c.description,
+        c.option_a,
+        c.option_b,
+        c.status,
+        COUNT(CASE WHEN v.vote = 'a' THEN 1 END) as votes_a,
+        COUNT(CASE WHEN v.vote = 'b' THEN 1 END) as votes_b
+      FROM competitions c
+      LEFT JOIN votes v ON c.id = v.competition_id
+      GROUP BY c.id, c.name, c.description, c.option_a, c.option_b, c.status
+      ORDER BY c.created_at DESC
+    `);
+    
+    const competitions = formatCompetitions(result);
+    res.json(competitions);
+  } catch (err) {
+    console.error('Error fetching scores:', err);
+    res.json([]);
+  }
 });
 
 server.listen(port, function () {

@@ -1,49 +1,177 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{{option_a}} vs {{option_b}}!</title>
+    <title>{{option_a}} vs {{option_b}} - Vote Now!</title>
     <base href="/index.html">
-    <meta name = "viewport" content = "width=device-width, initial-scale = 1.0">
-    <meta name="keywords" content="docker-compose, docker, stack">
-    <meta name="author" content="Tutum dev team">
-    <link rel='stylesheet' href="{{ url_for('static',filename='stylesheets/style.css') }}" />
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="keywords" content="docker-compose, docker, voting, poll">
+    <meta name="author" content="Docker Voting App">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+      .toast {
+        position: fixed; top: 20px; right: 20px;
+        animation: slideIn 0.3s ease-out, slideOut 0.3s ease-out 2.7s forwards;
+      }
+      @keyframes slideIn {
+        from { transform: translateX(400px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(400px); opacity: 0; }
+      }
+      .vote-btn {
+        transition: all 0.3s ease;
+      }
+      .vote-btn:hover:not(:disabled) {
+        transform: scale(1.05);
+      }
+      .vote-btn:disabled {
+        cursor: not-allowed;
+      }
+    </style>
   </head>
-  <body>
-    <div id="content-container">
-      <div id="content-container-center">
-        <h3>{{option_a}} vs {{option_b}}!</h3>
-        <form id="choice" name='form' method="POST" action="/">
-          <button id="a" type="submit" name="vote" class="a" value="a">{{option_a}}</button>
-          <button id="b" type="submit" name="vote" class="b" value="b">{{option_b}}</button>
-        </form>
-        <div id="tip">
-          (Tip: you can change your vote)
+  <body class="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    <div class="min-h-screen flex flex-col items-center justify-center p-4">
+      <!-- Header with Theme Toggle -->
+      <div class="absolute top-4 right-4">
+        <button id="theme-toggle" class="bg-gray-200 dark:bg-gray-700 p-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+          <span class="hidden dark:inline">☀️</span>
+          <span class="inline dark:hidden">🌙</span>
+        </button>
+      </div>
+
+      <!-- Main Card -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+        <div class="text-center mb-8">
+          <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 mb-2">
+            🗳️ Vote Now!
+          </h1>
+          <h2 class="text-2xl font-semibold text-gray-700 dark:text-gray-300">
+            {{option_a}} vs {{option_b}}
+          </h2>
         </div>
-        <div id="hostname">
-          Processed by container ID {{hostname}}
+
+        <!-- Vote Form -->
+        <form id="choice" name="form" method="POST" action="/" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <button
+              id="a"
+              type="submit"
+              name="vote"
+              value="a"
+              class="vote-btn bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-bold py-6 px-4 rounded-xl shadow-lg disabled:shadow-none"
+            >
+              <div class="text-3xl mb-2">{% if option_a == 'Cats' %}🐱{% elif option_a == 'Dogs' %}🐶{% else %}👍{% endif %}</div>
+              <div>{{option_a}}</div>
+            </button>
+            <button
+              id="b"
+              type="submit"
+              name="vote"
+              value="b"
+              class="vote-btn bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white font-bold py-6 px-4 rounded-xl shadow-lg disabled:shadow-none"
+            >
+              <div class="text-3xl mb-2">{% if option_b == 'Dogs' %}🐶{% elif option_b == 'Cats' %}🐱{% else %}👎{% endif %}</div>
+              <div>{{option_b}}</div>
+            </button>
+          </div>
+        </form>
+
+        <!-- Info Text -->
+        <div class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p>💡 Tip: You can change your vote anytime</p>
+          <p class="mt-2 text-xs text-gray-500 dark:text-gray-500">
+            Processed by: <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{{hostname[:8]}}</code>
+          </p>
+        </div>
+
+        <!-- Links -->
+        <div class="mt-6 text-center space-x-4">
+          <a href="http://localhost:8081" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-semibold">
+            📊 View Results
+          </a>
         </div>
       </div>
     </div>
-    <script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js"></script>
 
-    {% if vote %}
+    <!-- Toast Notification -->
+    <div id="toast" class="hidden toast bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-2">
+      <span>✓</span>
+      <span id="toast-message">Vote recorded successfully!</span>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
     <script>
-      var vote = "{{vote}}";
+      // Theme Toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      const theme = localStorage.getItem('theme') || 'light';
+      
+      if (theme === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        html.classList.add('dark');
+      }
+      
+      themeToggle.addEventListener('click', () => {
+        if (html.hasAttribute('data-theme')) {
+          html.removeAttribute('data-theme');
+          html.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+        } else {
+          html.setAttribute('data-theme', 'dark');
+          html.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+        }
+      });
 
-      if(vote == "a"){
-        $(".a").prop('disabled', true);
-        $(".a").html('{{option_a}} <i class="fa fa-check-circle"></i>');
-        $(".b").css('opacity','0.5');
+      // Show Toast on Vote
+      function showToast(message) {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        toastMessage.textContent = message;
+        toast.classList.remove('hidden');
+        setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 3000);
       }
-      if(vote == "b"){
-        $(".b").prop('disabled', true);
-        $(".b").html('{{option_b}} <i class="fa fa-check-circle"></i>');
-        $(".a").css('opacity','0.5');
+
+      // Handle Vote Submission & Feedback
+      var vote = "{{vote}}";
+      if (vote == "a") {
+        $("#a").prop('disabled', true);
+        $("#a").html('<div class="text-3xl mb-2">{% if option_a == "Cats" %}🐱{% elif option_a == "Dogs" %}🐶{% else %}👍{% endif %}</div><div>{{option_a}} ✓</div>');
+        $("#b").css('opacity', '0.5').prop('disabled', true);
+        showToast('You voted for {{option_a}}! ✓');
+        // Auto-redirect to results after 2 seconds
+        setTimeout(() => {
+          window.location.href = 'http://localhost:8081';
+        }, 2000);
       }
+      if (vote == "b") {
+        $("#b").prop('disabled', true);
+        $("#b").html('<div class="text-3xl mb-2">{% if option_b == "Dogs" %}🐶{% elif option_b == "Cats" %}🐱{% else %}👎{% endif %}</div><div>{{option_b}} ✓</div>');
+        $("#a").css('opacity', '0.5').prop('disabled', true);
+        showToast('You voted for {{option_b}}! ✓');
+        // Auto-redirect to results after 2 seconds
+        setTimeout(() => {
+          window.location.href = 'http://localhost:8081';
+        }, 2000);
+      }
+
+      // Show toast on form submission
+      document.getElementById('choice').addEventListener('submit', function() {
+        if (!$("#a").prop('disabled') && !$("#b").prop('disabled')) {
+          showToast('Recording your vote...');
+          // Reload page after short delay to show updated vote status
+          setTimeout(() => {
+            location.reload();
+          }, 500);
+        }
+      });
     </script>
-    {% endif %}
   </body>
 </html>

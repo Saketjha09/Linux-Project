@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+      .chart-container { position: relative; height: 300px; }
+      .modal { display: none; }
+      .modal.show { display: flex; }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-orange-50 to-red-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    <div class="min-h-screen p-4 md:p-8">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600 dark:from-orange-400 dark:to-red-400">
+            ⚙️ Admin Dashboard
+          </h1>
+          <p class="text-gray-600 dark:text-gray-400 mt-2">Manage competitions and monitor voting</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button id="theme-toggle" class="bg-gray-200 dark:bg-gray-700 p-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+            <span class="hidden dark:inline">☀️</span>
+            <span class="inline dark:hidden">🌙</span>
+          </button>
+          <div class="bg-white dark:bg-slate-800 px-4 py-2 rounded-lg shadow">
+            <p class="text-sm">👤 {{ user.username }} (Admin)</p>
+          </div>
+          <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition">
+            Logout
+          </a>
+        </div>
+      </div>
+
+      <!-- Create Competition Button -->
+      <div class="mb-8">
+        <button onclick="openCreateModal()" class="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition">
+          ➕ Create New Competition
+        </button>
+      </div>
+
+      <!-- Competitions Table -->
+      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-orange-100 dark:bg-orange-900/30">
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Name</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">{{ option_a }} (A)</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">{{ option_b }} (B)</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Total</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Status</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="competitions-tbody">
+              <!-- Loaded via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Scheduled Competitions Section -->
+      <div class="mt-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+        <div class="px-6 py-4 bg-purple-100 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-700">
+          <h3 class="text-xl font-bold text-purple-900 dark:text-purple-100">⏰ Scheduled Competitions</h3>
+        </div>
+        <div id="scheduled-empty" class="p-8 text-center text-gray-500 dark:text-gray-400">
+          <p>No scheduled competitions yet</p>
+        </div>
+        <div class="overflow-x-auto" id="scheduled-container" style="display: none;">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-purple-100 dark:bg-purple-900/30">
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Name</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Start Time</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">End Time</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Status</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-800 dark:text-gray-100">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="scheduled-tbody">
+              <!-- Loaded via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Competition Modal -->
+    <div id="createModal" class="modal fixed inset-0 bg-black/50 items-center justify-center p-4">
+      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-8 max-w-md w-full">
+        <h2 class="text-2xl font-bold mb-4">Create New Competition</h2>
+        
+        <form id="createForm" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold mb-2">Competition Name</label>
+            <input type="text" name="name" required placeholder="e.g., Cats vs Dogs" class="w-full px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-2">Description (optional)</label>
+            <textarea name="description" placeholder="Brief description..." class="w-full px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-2">Option A</label>
+            <input type="text" name="option_a" required placeholder="e.g., Cats" class="w-full px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold mb-2">Option B</label>
+            <input type="text" name="option_b" required placeholder="e.g., Dogs" class="w-full px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500">
+          </div>
+
+          <!-- Schedule Section -->
+          <div class="bg-purple-50 dark:bg-purple-900/30 p-3 rounded-lg border border-purple-200 dark:border-purple-700">
+            <p class="text-xs font-bold text-purple-700 dark:text-purple-400 mb-3">⏰ Schedule (Optional)</p>
+            <div>
+              <label class="block text-xs font-semibold mb-1">Start Time</label>
+              <input type="datetime-local" name="scheduled_start" placeholder="Leave empty to start now" class="w-full px-3 py-1 text-sm rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Leave empty to start immediately</p>
+            </div>
+            <div class="mt-2">
+              <label class="block text-xs font-semibold mb-1">End Time</label>
+              <input type="datetime-local" name="scheduled_end" placeholder="Optional auto-close time" class="w-full px-3 py-1 text-sm rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">Optional - will auto-close at this time</p>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <button type="submit" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition">
+              Create
+            </button>
+            <button type="button" onclick="closeCreateModal()" class="flex-1 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-100 font-bold py-2 px-4 rounded-lg transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Theme Toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      const theme = localStorage.getItem('theme') || 'light';
+      
+      if (theme === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        html.classList.add('dark');
+      }
+      
+      themeToggle.addEventListener('click', () => {
+        if (html.hasAttribute('data-theme')) {
+          html.removeAttribute('data-theme');
+          html.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+        } else {
+          html.setAttribute('data-theme', 'dark');
+          html.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+        }
+      });
+
+      // Modal functions
+      function openCreateModal() {
+        document.getElementById('createModal').classList.add('show');
+      }
+
+      function closeCreateModal() {
+        document.getElementById('createModal').classList.remove('show');
+        document.getElementById('createForm').reset();
+      }
+
+      // Load competitions
+      function loadCompetitions() {
+        fetch('/api/competitions').then(r => r.json()).then(comps => {
+          const tbody = document.getElementById('competitions-tbody');
+          tbody.innerHTML = comps.map(comp => `
+            <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              <td class="px-6 py-4 font-semibold">${comp.name}</td>
+              <td class="px-6 py-4"><span class="text-blue-600 dark:text-blue-400 font-bold">${comp.votes_a}</span></td>
+              <td class="px-6 py-4"><span class="text-red-600 dark:text-red-400 font-bold">${comp.votes_b}</span></td>
+              <td class="px-6 py-4"><span class="font-bold">${comp.votes_a + comp.votes_b}</span></td>
+              <td class="px-6 py-4">
+                <span class="px-3 py-1 rounded-full text-sm font-semibold ${
+                  comp.status === 'active' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100' : 
+                  comp.status === 'scheduled' ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-100' :
+                  'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }">
+                  ${
+                    comp.status === 'active' ? '🟢 Active' : 
+                    comp.status === 'scheduled' ? '🟣 Scheduled' :
+                    '🔴 Closed'
+                  }
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <div class="flex gap-2">
+                  ${comp.status === 'active' ? `<button onclick="closeCompetition(${comp.id})" class="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded text-sm transition">Close</button>` : `<button onclick="openCompetition(${comp.id})" class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm transition">Open</button>`}
+                  <button onclick="deleteCompetition(${comp.id})" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm transition">Delete</button>
+                </div>
+              </td>
+            </tr>
+          `).join('');
+        }).catch(err => console.error('Error loading competitions:', err));
+      }
+
+      // Load scheduled competitions
+      function loadScheduledCompetitions() {
+        fetch('/api/admin/competitions/scheduled').then(r => r.json()).then(comps => {
+          const scheduled = comps.filter(c => c.status === 'scheduled' && c.scheduled_start);
+          const tbody = document.getElementById('scheduled-tbody');
+          const emptyMsg = document.getElementById('scheduled-empty');
+          const container = document.getElementById('scheduled-container');
+          
+          if (scheduled.length === 0) {
+            container.style.display = 'none';
+            emptyMsg.style.display = 'block';
+            return;
+          }
+          
+          container.style.display = 'block';
+          emptyMsg.style.display = 'none';
+          
+          tbody.innerHTML = scheduled.map(comp => {
+            const startTime = new Date(comp.scheduled_start).toLocaleString();
+            const endTime = comp.scheduled_end ? new Date(comp.scheduled_end).toLocaleString() : 'Not set';
+            return `
+              <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <td class="px-6 py-4 font-semibold">${comp.name}</td>
+                <td class="px-6 py-4 text-sm">${startTime}</td>
+                <td class="px-6 py-4 text-sm">${endTime}</td>
+                <td class="px-6 py-4">
+                  <span class="px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-100">
+                    🟣 Scheduled
+                  </span>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex gap-2">
+                    <button onclick="startCompetitionNow(${comp.id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm transition">▶️ Start Now</button>
+                    <button onclick="deleteCompetition(${comp.id})" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm transition">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }).catch(err => console.error('Error loading scheduled competitions:', err));
+      }
+
+      // Start scheduled competition now
+      async function startCompetitionNow(id) {
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/open`, { method: 'POST' });
+          if (response.ok) {
+            loadCompetitions();
+            loadScheduledCompetitions();
+          }
+        } catch (err) {
+          alert('Error: ' + err);
+        }
+      }
+
+      // Create competition
+      document.getElementById('createForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        try {
+          const response = await fetch('/api/admin/competitions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(Object.fromEntries(formData))
+          });
+          
+          if (response.ok) {
+            closeCreateModal();
+            loadCompetitions();
+            alert('Competition created successfully!');
+          } else {
+            const error = await response.json();
+            alert('Error: ' + error.error);
+          }
+        } catch (err) {
+          alert('Failed to create competition: ' + err);
+        }
+      });
+
+      // Close competition
+      async function closeCompetition(id) {
+        if (confirm('Close this competition?')) {
+          try {
+            const response = await fetch(`/api/admin/competitions/${id}/close`, { method: 'POST' });
+            if (response.ok) {
+              loadCompetitions();
+            }
+          } catch (err) {
+            alert('Error: ' + err);
+          }
+        }
+      }
+
+      // Open competition
+      async function openCompetition(id) {
+        if (confirm('Reopen this competition?')) {
+          try {
+            const response = await fetch(`/api/admin/competitions/${id}/open`, { method: 'POST' });
+            if (response.ok) {
+              loadCompetitions();
+            }
+          } catch (err) {
+            alert('Error: ' + err);
+          }
+        }
+      }
+
+      // Delete competition
+      async function deleteCompetition(id) {
+        if (confirm('Delete this competition? This cannot be undone.')) {
+          try {
+            const response = await fetch(`/api/admin/competitions/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+              loadCompetitions();
+            }
+          } catch (err) {
+            alert('Error: ' + err);
+          }
+        }
+      }
+
+      // Load competitions on page load
+      loadCompetitions();
+      loadScheduledCompetitions();
+
+      // Refresh every 3 seconds
+      setInterval(() => {
+        loadCompetitions();
+        loadScheduledCompetitions();
+      }, 3000);
+    </script>
+  </body>
+</html>

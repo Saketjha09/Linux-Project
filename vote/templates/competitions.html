@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Competitions - Voting App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-green-50 to-teal-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    <div class="min-h-screen p-4 md:p-8">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-600 dark:from-green-400 dark:to-teal-400">
+            🎯 Competitions
+          </h1>
+          <p class="text-gray-600 dark:text-gray-400 mt-2">Choose a competition and vote</p>
+        </div>
+        <div class="flex gap-2 items-center">
+          <button id="theme-toggle" class="bg-gray-200 dark:bg-gray-700 p-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+            <span class="hidden dark:inline">☀️</span>
+            <span class="inline dark:hidden">🌙</span>
+          </button>
+          <div class="bg-white dark:bg-slate-800 px-4 py-2 rounded-lg shadow">
+            <p class="text-sm">👤 {{ user.username }}</p>
+          </div>
+          <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition">
+            Logout
+          </a>
+          {% if user.is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition">
+              📊 Admin
+            </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      {% if error %}
+        <div class="mb-4 p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-100 rounded-lg border border-red-300 dark:border-red-700">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <!-- Competitions Grid -->
+      {% if competitions %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {% for comp in competitions %}
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 hover:shadow-xl transition">
+              <!-- Status Badge -->
+              <div class="mb-4 flex justify-between items-start">
+                <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ comp.name }}</h2>
+                <span class="px-3 py-1 rounded-full text-sm font-semibold {% if comp.status == 'active' %}bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100{% else %}bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300{% endif %}">
+                  {% if comp.status == 'active' %}🟢 Active{% else %}🔴 Closed{% endif %}
+                </span>
+              </div>
+
+              <!-- Description -->
+              {% if comp.description %}
+                <p class="text-gray-600 dark:text-gray-400 mb-4">{{ comp.description }}</p>
+              {% endif %}
+
+              <!-- Options -->
+              <div class="space-y-3 mb-4">
+                <div>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">{{ comp.option_a }}</p>
+                  <div class="flex items-center gap-2">
+                    <div class="flex-grow bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div class="bg-blue-500 h-2 rounded-full" style="width: {% if comp.total_votes > 0 %}{{ (comp.votes_a / comp.total_votes * 100)|int }}{% else %}0{% endif %}%"></div>
+                    </div>
+                    <span class="font-bold text-blue-600 dark:text-blue-400 min-w-max">{{ comp.votes_a }}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">{{ comp.option_b }}</p>
+                  <div class="flex items-center gap-2">
+                    <div class="flex-grow bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div class="bg-red-500 h-2 rounded-full" style="width: {% if comp.total_votes > 0 %}{{ (comp.votes_b / comp.total_votes * 100)|int }}{% else %}0{% endif %}%"></div>
+                    </div>
+                    <span class="font-bold text-red-600 dark:text-red-400 min-w-max">{{ comp.votes_b }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Total Votes -->
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center">
+                Total: <span class="font-bold text-gray-800 dark:text-gray-100">{{ comp.total_votes }}</span> votes
+              </p>
+
+              <!-- Vote Button -->
+              {% if comp.status == 'active' %}
+                <a href="{{ url_for('vote', competition_id=comp.id) }}" class="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition text-center block">
+                  🗳️ Vote Now
+                </a>
+              {% else %}
+                <button disabled class="w-full bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 font-bold py-2 px-4 rounded-lg cursor-not-allowed">
+                  ✔️ Voting Closed
+                </button>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-center py-12">
+          <p class="text-gray-600 dark:text-gray-400 text-lg">No competitions available yet.</p>
+          {% if user.is_admin %}
+            <p class="text-gray-500 dark:text-gray-500 mt-2">Create one from the admin dashboard.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    <script>
+      // Theme Toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      const theme = localStorage.getItem('theme') || 'light';
+      
+      if (theme === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        html.classList.add('dark');
+      }
+      
+      themeToggle.addEventListener('click', () => {
+        if (html.hasAttribute('data-theme')) {
+          html.removeAttribute('data-theme');
+          html.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+        } else {
+          html.setAttribute('data-theme', 'dark');
+          html.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+        }
+      });
+
+      // Auto-refresh competitions every 3 seconds
+      setInterval(() => {
+        fetch('/api/competitions').then(r => r.json()).then(comps => {
+          // Update vote counts dynamically
+          document.querySelectorAll('[data-comp-id]').forEach(el => {
+            const compId = el.dataset.compId;
+            const comp = comps.find(c => c.id === parseInt(compId));
+            if (comp) {
+              el.querySelector('[data-votes-a]').textContent = comp.votes_a;
+              el.querySelector('[data-votes-b]').textContent = comp.votes_b;
+              const total = comp.votes_a + comp.votes_b;
+              const percentA = total > 0 ? (comp.votes_a / total * 100) : 0;
+              const percentB = total > 0 ? (comp.votes_b / total * 100) : 0;
+              el.querySelector('[data-bar-a]').style.width = percentA + '%';
+              el.querySelector('[data-bar-b]').style.width = percentB + '%';
+              el.querySelector('[data-total]').textContent = total;
+            }
+          });
+        }).catch(() => {});
+      }, 3000);
+    </script>
+  </body>
+</html>

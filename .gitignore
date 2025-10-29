@@ -4,3 +4,10 @@ bin/
 obj/
 .vs/
 node_modules/
+
+# Environment files - NEVER commit these with real secrets!
+.env
+.env.local
+.env.*.local
+.env.production
+
