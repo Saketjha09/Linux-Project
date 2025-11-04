@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Admin Dashboard - Enhanced</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+      .modal { display: none; }
+      .modal.show { display: flex; }
+      .tag { display: inline-block; padding: 0.25rem 0.75rem; margin: 0.25rem; border-radius: 9999px; font-size: 0.75rem; }
+      .percentage-bar { transition: width 0.5s ease; }
+      .search-highlight { background-color: yellow; font-weight: bold; }
+      .dropdown { position: relative; display: inline-block; }
+      .dropdown-content { display: none; position: absolute; right: 0; background-color: white; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 1000; border-radius: 0.5rem; margin-top: 0.5rem; }
+      .dropdown-content.show { display: block; }
+      .dropdown-content a { color: black; padding: 12px 16px; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
+      .dropdown-content a:hover { background-color: #f1f1f1; }
+      .dark .dropdown-content { background-color: #1e293b; }
+      .dark .dropdown-content a { color: white; }
+      .dark .dropdown-content a:hover { background-color: #334155; }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-orange-50 to-red-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    
+    <!-- Navbar -->
+    <nav id="main-navbar" class="bg-white dark:bg-slate-800 shadow-lg sticky top-0 z-50 transition-transform duration-300">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center">
+            <span class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600 dark:from-orange-400 dark:to-red-400">
+              ⚙️ Admin Dashboard
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-4">
+            <!-- Theme Toggle -->
+            <button id="theme-toggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <span class="hidden dark:inline text-xl">☀️</span>
+              <span class="inline dark:hidden text-xl">🌙</span>
+            </button>
+            
+            <!-- Profile Dropdown -->
+            <div class="dropdown">
+              <button onclick="toggleDropdown('profileDropdown')" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                <i class="fas fa-user-circle text-2xl"></i>
+                <span class="hidden sm:inline">{{ user.username }}</span>
+                <i class="fas fa-chevron-down text-xs"></i>
+              </button>
+              <div id="profileDropdown" class="dropdown-content">
+                <a href="/admin/profile"><i class="fas fa-user"></i> My Profile</a>
+                <a href="/admin/settings"><i class="fas fa-cog"></i> Settings</a>
+                <a href="{{ url_for('logout') }}" class="text-red-600"><i class="fas fa-sign-out-alt"></i> Logout</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="min-h-screen p-4 md:p-8">
+      <!-- Action Bar with Search -->
+      <div class="mb-8 flex flex-wrap gap-4 items-center">
+        <button onclick="openCreateModal()" class="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition">
+          <i class="fas fa-plus mr-2"></i>Create New Competition
+        </button>
+        
+        <!-- Search Bar -->
+        <div class="flex-1 min-w-[300px]">
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="🔍 Search competitions by name, tags, or description..." 
+            class="w-full px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            onkeyup="performSearch(this.value)"
+          >
+        </div>
+        
+        <!-- View Tabs -->
+        <div class="flex gap-2">
+          <button id="btn-active" onclick="showView('active')" class="px-4 py-3 rounded-lg bg-green-500 font-semibold text-white transition">
+            <i class="fas fa-check-circle"></i> Active
+          </button>
+          <button id="btn-archived" onclick="showView('archived')" class="px-4 py-3 rounded-lg bg-gray-500 text-white transition">
+            <i class="fas fa-archive"></i> Archived
+          </button>
+          <button id="btn-trash" onclick="showView('trash')" class="px-4 py-3 rounded-lg bg-gray-500 text-white transition">
+            <i class="fas fa-trash"></i> Trash
+          </button>
+        </div>
+        
+        <button onclick="loadCompetitions()" class="px-4 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </div>
+
+      <!-- Competitions Table -->
+      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-orange-100 dark:bg-orange-900/30">
+                <th class="px-6 py-3 text-left text-sm font-semibold">Image</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Name</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Description</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Tags</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Votes</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Status</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Schedule</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="competitions-tbody">
+              <tr><td colspan="8" class="text-center py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create/Edit Competition Modal -->
+    <div id="competitionModal" class="modal fixed inset-0 bg-black/50 items-center justify-center p-4 overflow-y-auto z-50">
+      <div class="bg-gradient-to-br from-orange-50 to-red-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl shadow-2xl p-8 max-w-3xl w-full my-8 border-2 border-orange-200 dark:border-orange-700">
+        <h2 id="modalTitle" class="text-3xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+          <i class="fas fa-trophy"></i> Create New Competition
+        </h2>
+        
+        <form id="competitionForm" class="space-y-5">
+          <input type="hidden" id="compId" value="">
+          
+          <!-- Competition Name -->
+          <div>
+            <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+              <i class="fas fa-heading text-orange-500"></i> Competition Name *
+            </label>
+            <input type="text" id="compName" required 
+              class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-orange-300 dark:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent shadow-sm">
+          </div>
+
+          <!-- Description -->
+          <div>
+            <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+              <i class="fas fa-align-left text-orange-500"></i> Description
+            </label>
+            <textarea id="compDescription" rows="3"
+              class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-orange-300 dark:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-sm"
+              placeholder="Explain what this competition is about..."></textarea>
+          </div>
+
+          <!-- Options -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-check-circle text-blue-500"></i> Option A *
+              </label>
+              <input type="text" id="compOptionA" required
+                class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-blue-300 dark:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">
+            </div>
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-times-circle text-red-500"></i> Option B *
+              </label>
+              <input type="text" id="compOptionB" required
+                class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-red-300 dark:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm">
+            </div>
+          </div>
+
+          <!-- Tags and Image -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-tags text-purple-500"></i> Tags (comma separated)
+              </label>
+              <input type="text" id="compTags" placeholder="sports, politics, entertainment"
+                class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-purple-300 dark:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm">
+            </div>
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-image text-pink-500"></i> Image URL
+              </label>
+              <input type="url" id="compImageUrl" placeholder="https://example.com/image.jpg"
+                class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-pink-300 dark:border-pink-600 focus:outline-none focus:ring-2 focus:ring-pink-500 shadow-sm">
+            </div>
+          </div>
+
+          <!-- Scheduling Section -->
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-5 rounded-xl border-2 border-indigo-200 dark:border-indigo-700">
+            <h3 class="text-lg font-bold mb-4 text-indigo-700 dark:text-indigo-300">
+              <i class="fas fa-calendar-alt"></i> Schedule Competition (Optional)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                  <i class="fas fa-clock text-green-500"></i> Start Date & Time
+                </label>
+                <input type="datetime-local" id="compScheduledStart"
+                  class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-green-300 dark:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm">
+              </div>
+              <div>
+                <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                  <i class="fas fa-flag-checkered text-red-500"></i> End Date & Time
+                </label>
+                <input type="datetime-local" id="compScheduledEnd"
+                  class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border-2 border-red-300 dark:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm">
+              </div>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-3">
+              <i class="fas fa-info-circle"></i> Leave empty for immediate start. Competition will auto-open/close based on schedule.
+            </p>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-4 mt-6">
+            <button type="submit" class="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-4 rounded-xl transition shadow-lg hover:shadow-xl transform hover:scale-105">
+              <i class="fas fa-save mr-2"></i><span id="submitBtnText">Create Competition</span>
+            </button>
+            <button type="button" onclick="closeModal()" class="px-8 bg-gray-500 hover:bg-gray-600 text-white font-bold py-4 rounded-xl transition shadow-lg">
+              <i class="fas fa-times mr-2"></i>Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let currentView = 'active';
+      let searchTimeout;
+      let allCompetitions = [];
+
+      // Theme toggle - Initialize on load
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      
+      // Apply saved theme on load
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        html.classList.add('dark');
+        html.setAttribute('data-theme', 'dark');
+      } else {
+        html.classList.remove('dark');
+        html.removeAttribute('data-theme');
+      }
+      
+      // Theme toggle click handler
+      themeToggle.addEventListener('click', () => {
+        if (html.classList.contains('dark')) {
+          html.classList.remove('dark');
+          html.removeAttribute('data-theme');
+          localStorage.theme = 'light';
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', 'dark');
+          localStorage.theme = 'dark';
+        }
+      });
+
+      // Auto-hide navbar on scroll
+      let lastScrollTop = 0;
+      const navbar = document.getElementById('main-navbar');
+      
+      window.addEventListener('scroll', () => {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > lastScrollTop && scrollTop > 100) {
+          // Scrolling down & past 100px
+          navbar.style.transform = 'translateY(-100%)';
+        } else {
+          // Scrolling up
+          navbar.style.transform = 'translateY(0)';
+        }
+        
+        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+      }, false);
+
+      // Dropdown toggle
+      function toggleDropdown(id) {
+        const dropdown = document.getElementById(id);
+        dropdown.classList.toggle('show');
+        
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d.id !== id) d.classList.remove('show');
+        });
+      }
+
+      // Close dropdowns when clicking outside
+      window.onclick = function(event) {
+        if (!event.target.matches('.dropdown button, .dropdown button *')) {
+          document.querySelectorAll('.dropdown-content').forEach(d => {
+            d.classList.remove('show');
+          });
+        }
+      }
+
+      // Load competitions on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        loadCompetitions();
+        setupVoteStream();
+      });
+
+      function showView(view) {
+        currentView = view;
+        document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+          btn.classList.remove('bg-green-500', 'bg-blue-500', 'bg-red-500', 'font-semibold');
+          btn.classList.add('bg-gray-500');
+        });
+        
+        const btnId = `btn-${view}`;
+        const btn = document.getElementById(btnId);
+        btn.classList.remove('bg-gray-500');
+        btn.classList.add('font-semibold');
+        
+        if (view === 'active') btn.classList.add('bg-green-500');
+        else if (view === 'archived') btn.classList.add('bg-blue-500');
+        else if (view === 'trash') btn.classList.add('bg-red-500');
+        
+        loadCompetitions();
+      }
+
+      function setupVoteStream() {
+        const eventSource = new EventSource('/api/admin/vote-stream');
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'connected') {
+              console.log('Connected to vote stream');
+            } else if (data.competition_id) {
+              console.log('Vote update received for competition:', data.competition_id);
+              loadCompetitions();
+            }
+          } catch (error) {
+            console.error('Error parsing SSE data:', error);
+          }
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error('SSE connection error:', error);
+          eventSource.close();
+          setTimeout(setupVoteStream, 5000);
+        };
+      }
+
+      async function loadCompetitions() {
+        const tbody = document.getElementById('competitions-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</td></tr>';
+        
+        try {
+          let url = '/api/competitions';
+          if (currentView === 'archived') url = '/api/admin/competitions/archived';
+          else if (currentView === 'trash') url = '/api/admin/competitions/trash';
+          
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('Failed to load');
+          
+          const data = await response.json();
+          allCompetitions = Array.isArray(data) ? data : (data.competitions || []);
+          renderCompetitions(allCompetitions);
+        } catch (error) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-500">Error loading competitions</td></tr>';
+          console.error(error);
+        }
+      }
+
+      function renderCompetitions(competitions) {
+        const tbody = document.getElementById('competitions-tbody');
+        
+        if (competitions.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500">
+            ${currentView === 'trash' ? 'Trash is empty' : currentView === 'archived' ? 'No archived competitions' : 'No competitions yet'}
+          </td></tr>`;
+          return;
+        }
+        
+        tbody.innerHTML = competitions.map(comp => {
+          const votesA = comp.votes_a || 0;
+          const votesB = comp.votes_b || 0;
+          const total = votesA + votesB;
+          const percA = total > 0 ? ((votesA / total) * 100).toFixed(1) : 0;
+          const percB = total > 0 ? ((votesB / total) * 100).toFixed(1) : 0;
+          
+          const tags = comp.tags || [];
+          const tagsHtml = tags.map(tag => `<span class="tag bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100">${tag}</span>`).join('');
+          
+          const imageHtml = comp.image_url 
+            ? `<img src="${comp.image_url}" class="w-12 h-12 object-cover rounded-lg" alt="${comp.name}">` 
+            : '<div class="w-12 h-12 bg-gray-300 dark:bg-gray-600 rounded-lg flex items-center justify-center"><i class="fas fa-image text-gray-500"></i></div>';
+          
+          const scheduleText = comp.scheduled_start && comp.scheduled_end 
+            ? `<div class="text-xs"><i class="fas fa-clock"></i> ${new Date(comp.scheduled_start).toLocaleDateString()} - ${new Date(comp.scheduled_end).toLocaleDateString()}</div>`
+            : '<span class="text-xs text-gray-500">Immediate</span>';
+          
+          return `
+            <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition">
+              <td class="px-6 py-4">${imageHtml}</td>
+              <td class="px-6 py-4 font-semibold">${comp.name}</td>
+              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate">${comp.description || '<em>No description</em>'}</td>
+              <td class="px-6 py-4">${tagsHtml || '<span class="text-gray-400">-</span>'}</td>
+              <td class="px-6 py-4">
+                <div class="text-sm">
+                  <div>A: <span class="font-bold text-blue-600">${votesA}</span> (${percA}%)</div>
+                  <div>B: <span class="font-bold text-red-600">${votesB}</span> (${percB}%)</div>
+                  <div class="text-xs text-gray-500">Total: ${total} votes</div>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-3 py-1 rounded-full text-xs font-semibold ${comp.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}">
+                  ${comp.status}
+                </span>
+              </td>
+              <td class="px-6 py-4">${scheduleText}</td>
+              <td class="px-6 py-4">
+                <div class="dropdown">
+                  <button onclick="toggleDropdown('actions-${comp.id}')" class="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-4 py-2 rounded-lg font-semibold transition">
+                    <i class="fas fa-ellipsis-v"></i> Take Action
+                  </button>
+                  <div id="actions-${comp.id}" class="dropdown-content">
+                    <a href="#" onclick="editCompetition(${comp.id}); return false;"><i class="fas fa-edit text-blue-500"></i> Edit</a>
+                    <a href="#" onclick="duplicateCompetition(${comp.id}); return false;"><i class="fas fa-copy text-purple-500"></i> Clone</a>
+                    ${comp.status === 'active' 
+                      ? `<a href="#" onclick="closeCompetition(${comp.id}); return false;"><i class="fas fa-lock text-orange-500"></i> Close</a>`
+                      : `<a href="#" onclick="openCompetition(${comp.id}); return false;"><i class="fas fa-unlock text-green-500"></i> Open</a>`
+                    }
+                    ${!comp.is_archived 
+                      ? `<a href="#" onclick="archiveCompetition(${comp.id}); return false;"><i class="fas fa-archive text-yellow-500"></i> Archive</a>`
+                      : `<a href="#" onclick="unarchiveCompetition(${comp.id}); return false;"><i class="fas fa-box-open text-green-500"></i> Unarchive</a>`
+                    }
+                    <a href="#" onclick="deleteCompetition(${comp.id}); return false;"><i class="fas fa-trash text-red-500"></i> Delete</a>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      function performSearch(query) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          if (!query.trim()) {
+            renderCompetitions(allCompetitions);
+            return;
+          }
+          
+          const filtered = allCompetitions.filter(comp => {
+            const searchTerm = query.toLowerCase();
+            return (
+              comp.name.toLowerCase().includes(searchTerm) ||
+              (comp.description && comp.description.toLowerCase().includes(searchTerm)) ||
+              (comp.tags && comp.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
+            );
+          });
+          
+          renderCompetitions(filtered);
+        }, 300);
+      }
+
+      function openCreateModal() {
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-trophy"></i> Create New Competition';
+        document.getElementById('submitBtnText').textContent = 'Create Competition';
+        document.getElementById('competitionForm').reset();
+        document.getElementById('compId').value = '';
+        document.getElementById('competitionModal').classList.add('show');
+      }
+
+      function closeModal() {
+        document.getElementById('competitionModal').classList.remove('show');
+      }
+
+      document.getElementById('competitionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const id = document.getElementById('compId').value;
+        const data = {
+          name: document.getElementById('compName').value,
+          description: document.getElementById('compDescription').value,
+          option_a: document.getElementById('compOptionA').value,
+          option_b: document.getElementById('compOptionB').value,
+          tags: document.getElementById('compTags').value,
+          image_url: document.getElementById('compImageUrl').value,
+          scheduled_start: document.getElementById('compScheduledStart').value || null,
+          scheduled_end: document.getElementById('compScheduledEnd').value || null
+        };
+        
+        try {
+          const url = id ? `/api/admin/competitions/${id}` : '/api/admin/competitions';
+          const method = id ? 'PUT' : 'POST';
+          
+          const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          
+          if (!response.ok) throw new Error('Failed to save');
+          
+          closeModal();
+          loadCompetitions();
+          alert(id ? 'Competition updated successfully!' : 'Competition created successfully!');
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      });
+
+      async function editCompetition(id) {
+        const comp = allCompetitions.find(c => c.id === id);
+        if (!comp) return;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Competition';
+        document.getElementById('submitBtnText').textContent = 'Update Competition';
+        document.getElementById('compId').value = comp.id;
+        document.getElementById('compName').value = comp.name;
+        document.getElementById('compDescription').value = comp.description || '';
+        document.getElementById('compOptionA').value = comp.option_a;
+        document.getElementById('compOptionB').value = comp.option_b;
+        document.getElementById('compTags').value = (comp.tags || []).join(', ');
+        document.getElementById('compImageUrl').value = comp.image_url || '';
+        document.getElementById('compScheduledStart').value = comp.scheduled_start || '';
+        document.getElementById('compScheduledEnd').value = comp.scheduled_end || '';
+        document.getElementById('competitionModal').classList.add('show');
+      }
+
+      async function duplicateCompetition(id) {
+        if (!confirm('Create a copy of this competition?')) return;
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/duplicate`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to duplicate');
+          loadCompetitions();
+          alert('Competition duplicated successfully!');
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function archiveCompetition(id) {
+        if (!confirm('Archive this competition?')) return;
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/archive`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to archive');
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function unarchiveCompetition(id) {
+        if (!confirm('Unarchive this competition?')) return;
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/unarchive`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to unarchive');
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function deleteCompetition(id) {
+        if (!confirm('Move this competition to trash?')) return;
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/soft-delete`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to delete');
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function closeCompetition(id) {
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/close`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to close');
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function openCompetition(id) {
+        try {
+          const response = await fetch(`/api/admin/competitions/${id}/open`, {method: 'POST'});
+          if (!response.ok) throw new Error('Failed to open');
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+    </script>
+  </body>
+</html>

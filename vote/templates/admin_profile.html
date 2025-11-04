@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Admin Profile - Voting App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+      .avatar-preview { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-orange-50 to-red-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    
+    <!-- Navbar -->
+    <nav class="bg-white dark:bg-slate-800 shadow-lg sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center">
+            <a href="/admin/dashboard" class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+              ⚙️ Admin Panel
+            </a>
+          </div>
+          
+          <div class="flex items-center gap-4">
+            <button id="theme-toggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <span class="hidden dark:inline text-xl">☀️</span>
+              <span class="inline dark:hidden text-xl">🌙</span>
+            </button>
+            
+            <a href="/admin/dashboard" class="px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+            
+            <a href="{{ url_for('logout') }}" class="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition">
+              <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="min-h-screen p-4 md:p-8">
+      <div class="max-w-4xl mx-auto">
+        
+        <!-- Profile Header -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 mb-6">
+          <div class="flex flex-col md:flex-row items-center gap-6">
+            <div class="relative">
+              <img id="avatar-preview" src="{{ user.avatar_url or 'https://ui-avatars.com/api/?name=Admin&size=150&background=f97316' }}" 
+                   class="avatar-preview border-4 border-orange-500 shadow-lg" alt="Profile">
+              <label for="avatar-upload" class="absolute bottom-0 right-0 bg-orange-500 text-white p-3 rounded-full cursor-pointer hover:bg-orange-600 transition shadow-lg">
+                <i class="fas fa-camera"></i>
+                <input type="file" id="avatar-upload" class="hidden" accept="image/*">
+              </label>
+            </div>
+            
+            <div class="flex-1 text-center md:text-left">
+              <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+                {{ user.username }}
+              </h1>
+              <p class="text-orange-600 dark:text-orange-400 font-semibold mt-2">
+                <i class="fas fa-shield-alt"></i> Administrator
+              </p>
+              <p class="text-gray-600 dark:text-gray-400 mt-1">
+                <i class="fas fa-envelope"></i> {{ user.email or 'No email set' }}
+              </p>
+              <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                <i class="fas fa-calendar-alt"></i> Admin since {{ user.created_at.strftime('%B %Y') if user.created_at else 'Recently' }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-xl p-6 text-center shadow-lg">
+            <i class="fas fa-trophy text-4xl mb-2"></i>
+            <p class="text-3xl font-bold" id="total-comps">-</p>
+            <p class="text-sm opacity-90">Total Competitions</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 text-center shadow-lg">
+            <i class="fas fa-vote-yea text-4xl mb-2"></i>
+            <p class="text-3xl font-bold" id="total-votes">-</p>
+            <p class="text-sm opacity-90">Total Votes</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-6 text-center shadow-lg">
+            <i class="fas fa-users text-4xl mb-2"></i>
+            <p class="text-3xl font-bold" id="total-users">-</p>
+            <p class="text-sm opacity-90">Total Users</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 text-center shadow-lg">
+            <i class="fas fa-chart-line text-4xl mb-2"></i>
+            <p class="text-3xl font-bold" id="active-comps">-</p>
+            <p class="text-sm opacity-90">Active Now</p>
+          </div>
+        </div>
+
+        <!-- Edit Profile Form -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8">
+          <h2 class="text-2xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+            <i class="fas fa-user-cog"></i> Edit Admin Profile
+          </h2>
+          
+          <form id="profile-form" class="space-y-6">
+            
+            <!-- Full Name -->
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-user text-orange-500"></i> Full Name
+              </label>
+              <input type="text" id="full-name" value="{{ user.full_name or '' }}"
+                class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-700 border-2 border-orange-300 dark:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-sm">
+            </div>
+
+            <!-- Email -->
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-envelope text-red-500"></i> Email Address
+              </label>
+              <input type="email" id="email" value="{{ user.email or '' }}"
+                class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-700 border-2 border-red-300 dark:border-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm">
+            </div>
+
+            <!-- Phone -->
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-phone text-green-500"></i> Phone Number
+              </label>
+              <input type="tel" id="phone" value="{{ user.phone or '' }}"
+                class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-700 border-2 border-green-300 dark:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm">
+            </div>
+
+            <!-- Bio -->
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-pen text-blue-500"></i> Bio
+              </label>
+              <textarea id="bio" rows="4" placeholder="Tell us about yourself..."
+                class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-700 border-2 border-blue-300 dark:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm">{{ user.bio or '' }}</textarea>
+            </div>
+
+            <!-- Location -->
+            <div>
+              <label class="block font-semibold mb-2 text-gray-700 dark:text-gray-200">
+                <i class="fas fa-map-marker-alt text-purple-500"></i> Location
+              </label>
+              <input type="text" id="location" value="{{ user.location or '' }}" placeholder="City, Country"
+                class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-slate-700 border-2 border-purple-300 dark:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm">
+            </div>
+
+            <!-- Save Button -->
+            <div class="flex gap-4">
+              <button type="submit" class="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-4 rounded-xl transition shadow-lg hover:shadow-xl transform hover:scale-105">
+                <i class="fas fa-save mr-2"></i>Save Profile
+              </button>
+              <a href="/admin/dashboard" class="px-8 bg-gray-500 hover:bg-gray-600 text-white font-bold py-4 rounded-xl transition shadow-lg text-center flex items-center justify-center">
+                <i class="fas fa-times mr-2"></i>Cancel
+              </a>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      // Theme toggle
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      
+      if (localStorage.theme === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        html.classList.add('dark');
+      }
+      
+      themeToggle.addEventListener('click', () => {
+        if (html.classList.contains('dark')) {
+          html.classList.remove('dark');
+          html.removeAttribute('data-theme');
+          localStorage.theme = 'light';
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', 'dark');
+          localStorage.theme = 'dark';
+        }
+      });
+
+      // Load admin stats
+      async function loadStats() {
+        try {
+          const response = await fetch('/api/admin/stats');
+          if (response.ok) {
+            const stats = await response.json();
+            document.getElementById('total-comps').textContent = stats.total_competitions || 0;
+            document.getElementById('total-votes').textContent = stats.total_votes || 0;
+            document.getElementById('total-users').textContent = stats.total_users || 0;
+            document.getElementById('active-comps').textContent = stats.active_competitions || 0;
+          }
+        } catch (error) {
+          console.error('Error loading stats:', error);
+        }
+      }
+
+      // Avatar preview
+      document.getElementById('avatar-upload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            document.getElementById('avatar-preview').src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Save profile
+      document.getElementById('profile-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const data = {
+          full_name: document.getElementById('full-name').value,
+          email: document.getElementById('email').value,
+          phone: document.getElementById('phone').value,
+          bio: document.getElementById('bio').value,
+          location: document.getElementById('location').value
+        };
+        
+        try {
+          const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          
+          if (response.ok) {
+            alert('Profile updated successfully!');
+            window.location.href = '/admin/dashboard';
+          } else {
+            throw new Error('Failed to update profile');
+          }
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      });
+
+      // Load stats on page load
+      loadStats();
+    </script>
+  </body>
+</html>

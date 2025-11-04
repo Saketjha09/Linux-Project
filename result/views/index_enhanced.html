@@ -532,8 +532,13 @@
         updateUI();
       });
 
-      // Socket.io already handles real-time updates via 'scores' event
-      // No need for interval polling
+      // Auto-refresh
+      setInterval(() => {
+        fetch('/api/scores').then(r => r.json()).then(data => {
+          allCompetitions = data;
+          updateUI();
+        });
+      }, 1000);
     </script>
   </body>
 </html>

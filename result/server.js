@@ -3,6 +3,7 @@ var express = require('express'),
     { Pool } = require('pg'),
     cookieParser = require('cookie-parser'),
     path = require('path'),
+    redis = require('redis'),
     app = express(),
     server = require('http').Server(app),
     io = require('socket.io')(server);
@@ -16,7 +17,25 @@ var dbName = process.env.DB_NAME || 'postgres';
 var dbUser = process.env.POSTGRES_USER || 'postgres';
 var dbPassword = process.env.POSTGRES_PASSWORD || 'postgres';
 
+// Redis Configuration
+var redisHost = process.env.REDIS_HOST || 'redis';
+var redisPort = process.env.REDIS_PORT || 6379;
+
 var connectionString = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}`;
+
+// Create Redis subscriber for vote updates
+var redisSubscriber = redis.createClient({
+  host: redisHost,
+  port: redisPort
+});
+
+redisSubscriber.on('error', function(err) {
+  console.error('Redis subscriber error:', err);
+});
+
+redisSubscriber.on('connect', function() {
+  console.log('Connected to Redis for vote updates');
+});
 
 io.on('connection', function (socket) {
 
@@ -46,7 +65,18 @@ async.retry(
       return console.error("Giving up");
     }
     console.log("Connected to db");
+    
+    // Initial load
     getVotes(client);
+    
+    // Subscribe to Redis vote_updates channel
+    redisSubscriber.subscribe('vote_updates');
+    redisSubscriber.on('message', function(channel, message) {
+      if (channel === 'vote_updates') {
+        console.log('Vote update received, refreshing scores...');
+        getVotes(client);
+      }
+    });
   }
 );
 
@@ -73,8 +103,8 @@ function getVotes(client) {
       var competitions = formatCompetitions(result);
       io.sockets.emit("scores", JSON.stringify(competitions));
     }
-
-    setTimeout(function() {getVotes(client) }, 1000);
+    
+    // No more setTimeout - only updates on Redis pub/sub events
   });
 }
 

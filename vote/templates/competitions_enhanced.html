@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Competitions - Voting App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+      [data-theme="dark"] { color-scheme: dark; }
+      body { transition: background-color 0.3s, color 0.3s; }
+      .spinner { animation: spin 1s linear infinite; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .tag-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+      .comment-thread { border-left: 2px solid #E5E7EB; padding-left: 1rem; margin-left: 0.5rem; }
+      .dark .comment-thread { border-color: #374151; }
+      /* Sidebar - Hidden by default, slides in when open */
+      .sidebar { 
+        position: fixed; 
+        left: -380px; 
+        width: 350px; 
+        height: 100vh; 
+        z-index: 40; 
+        transition: left 0.3s ease-in-out;
+        top: 64px; /* Below navbar */
+      }
+      .sidebar.open { left: 0; }
+      /* Overlay when sidebar is open */
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 30;
+      }
+      .sidebar-overlay.show { display: block; }
+      .dropdown { position: relative; display: inline-block; }
+      .dropdown-content { display: none; position: absolute; right: 0; background-color: white; min-width: 200px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 1000; border-radius: 0.5rem; margin-top: 0.5rem; }
+      .dropdown-content.show { display: block; }
+      .dropdown-content a { color: black; padding: 12px 16px; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
+      .dropdown-content a:hover { background-color: #f1f1f1; }
+      .dark .dropdown-content { background-color: #1e293b; }
+      .dark .dropdown-content a { color: white; }
+      .dark .dropdown-content a:hover { background-color: #334155; }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-green-50 to-teal-100 dark:from-slate-900 dark:to-slate-800 text-gray-900 dark:text-gray-100">
+    
+    <!-- Navbar -->
+    <nav id="main-navbar" class="bg-white dark:bg-slate-800 shadow-lg sticky top-0 z-50 transition-transform duration-300">
+      <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center gap-2">
+            <!-- Hamburger Menu (Absolute Left) -->
+            <button id="sidebar-toggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition -ml-2">
+              <i class="fas fa-bars text-2xl"></i>
+            </button>
+            
+            <!-- Logo -->
+            <span class="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-600 dark:from-green-400 dark:to-teal-400">
+              🎯 Voting App
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-3">
+            <!-- Search Icon -->
+            <button class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <i class="fas fa-search text-lg text-gray-700 dark:text-gray-300"></i>
+            </button>
+            
+            <!-- Dark/Light Mode Toggle -->
+            <button id="theme-toggle" class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+              <span class="hidden dark:inline text-xl">☀️</span>
+              <span class="inline dark:hidden text-xl">🌙</span>
+            </button>
+            
+            <!-- Profile Dropdown -->
+            <div class="dropdown">
+              <button onclick="toggleDropdown('profileDropdown')" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                <i class="fas fa-user-circle text-2xl"></i>
+                <span class="hidden sm:inline">{{ user.username }}</span>
+                <i class="fas fa-chevron-down text-xs"></i>
+              </button>
+              <div id="profileDropdown" class="dropdown-content">
+                <a href="/user/profile"><i class="fas fa-user"></i> My Profile</a>
+                <a href="#" onclick="openStatsModal(); return false;"><i class="fas fa-chart-bar"></i> My Stats</a>
+                {% if user.is_admin %}
+                  <a href="{{ url_for('admin_dashboard') }}"><i class="fas fa-shield-alt"></i> Admin Panel</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="text-red-600"><i class="fas fa-sign-out-alt"></i> Logout</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar bg-white dark:bg-slate-800 shadow-lg overflow-y-auto">
+      <div class="p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-600 dark:from-green-400 dark:to-teal-400">
+            <i class="fas fa-filter"></i> Filters
+          </h3>
+          <button id="sidebar-close" class="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+          
+          <!-- Search -->
+          <div class="mb-4">
+            <label class="block text-sm font-semibold mb-2">
+              <i class="fas fa-search text-green-500"></i> Search
+            </label>
+            <input 
+              type="text" 
+              id="search-input" 
+              placeholder="Search..." 
+              class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+            >
+          </div>
+
+          <!-- Tag Filter -->
+          <div class="mb-4">
+            <label class="block text-sm font-semibold mb-2">
+              <i class="fas fa-tags text-purple-500"></i> Category
+            </label>
+            <select id="tag-filter" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-green-500 text-sm">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+
+          <!-- Sort -->
+          <div class="mb-4">
+            <label class="block text-sm font-semibold mb-2">
+              <i class="fas fa-sort text-blue-500"></i> Sort By
+            </label>
+            <select id="sort-select" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-green-500 text-sm">
+              <option value="newest">Newest First</option>
+              <option value="popular">Most Popular</option>
+              <option value="trending">Trending</option>
+              <option value="ending_soon">Ending Soon</option>
+            </select>
+          </div>
+
+          <hr class="my-4 border-gray-300 dark:border-gray-600">
+
+          <!-- Quick Links -->
+          <h3 class="text-sm font-bold mb-3 text-gray-700 dark:text-gray-300">
+            <i class="fas fa-link"></i> Quick Links
+          </h3>
+          
+          <a href="/user/favorites" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/20 transition mb-2 text-sm">
+            <i class="fas fa-star text-yellow-500"></i> Favorites
+          </a>
+          
+          <button onclick="openStatsModal()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/20 transition mb-2 text-sm text-left">
+            <i class="fas fa-chart-bar text-purple-500"></i> My Stats
+          </button>
+          
+          <button id="refresh-btn" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition text-sm">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="p-4 md:p-6">
+        
+        <!-- Stats Modal -->
+        <div id="stats-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full p-6">
+            <div class="flex justify-between items-center mb-6">
+              <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                <i class="fas fa-chart-line text-purple-500"></i> Your Statistics
+              </h2>
+              <button id="close-stats" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                <i class="fas fa-times text-xl"></i>
+              </button>
+            </div>
+            <div id="stats-content" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg p-4 text-center">
+                <i class="fas fa-vote-yea text-3xl mb-2"></i>
+                <p class="text-3xl font-bold" id="stat-votes">0</p>
+                <p class="text-sm opacity-90">Total Votes</p>
+              </div>
+              <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg p-4 text-center">
+                <i class="fas fa-trophy text-3xl mb-2"></i>
+                <p class="text-3xl font-bold" id="stat-competitions">0</p>
+                <p class="text-sm opacity-90">Participated</p>
+              </div>
+              <div class="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white rounded-lg p-4 text-center">
+                <i class="fas fa-star text-3xl mb-2"></i>
+                <p class="text-3xl font-bold" id="stat-favorites">0</p>
+                <p class="text-sm opacity-90">Favorites</p>
+              </div>
+              <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg p-4 text-center">
+                <i class="fas fa-tag text-3xl mb-2"></i>
+                <p class="text-lg font-bold" id="stat-category">-</p>
+                <p class="text-sm opacity-90">Top Category</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Competitions Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Main Competitions (Left - 2 cols) -->
+          <div class="lg:col-span-2">
+            <h2 class="text-2xl font-bold mb-4 flex items-center gap-2">
+              <i class="fas fa-trophy text-green-500"></i>
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-600 dark:from-green-400 dark:to-teal-400">
+                Competitions
+              </span>
+            </h2>
+            <div id="competitions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Competitions will be loaded here -->
+            </div>
+            <div id="loading" class="text-center py-12">
+              <i class="fas fa-spinner spinner text-4xl text-green-500"></i>
+              <p class="text-gray-600 dark:text-gray-400 mt-4">Loading competitions...</p>
+            </div>
+            <div id="no-results" class="hidden text-center py-12">
+              <i class="fas fa-inbox text-6xl text-gray-400 mb-4"></i>
+              <p class="text-gray-600 dark:text-gray-400 text-lg">No competitions found.</p>
+            </div>
+          </div>
+
+          <!-- Trending Sidebar (Right - 1 col) -->
+          <div class="lg:col-span-1">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 sticky top-20">
+              <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i class="fas fa-fire text-orange-500"></i>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
+                  Trending Now
+                </span>
+              </h3>
+              <div id="trending-list" class="space-y-3">
+                <p class="text-gray-500 text-sm">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+    <!-- Comment Modal -->
+    <div id="comment-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full p-6 max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+            <i class="fas fa-comments text-blue-500"></i> <span id="modal-comp-name">Comments</span>
+          </h2>
+          <button id="close-comment-modal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <!-- Add Comment Form -->
+        <div class="mb-6">
+          <textarea id="comment-text" rows="3" placeholder="Share your thoughts..." 
+            class="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+          <button onclick="addComment()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition">
+            <i class="fas fa-paper-plane"></i> Post Comment
+          </button>
+        </div>
+        
+        <!-- Comments List -->
+        <div id="comments-list" class="space-y-4">
+          <p class="text-gray-500 text-center py-4">No comments yet. Be the first!</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let allCompetitions = [];
+      let allTags = [];
+      let currentCompetitionId = null;
+
+      // Theme toggle - Initialize on load
+      const themeToggle = document.getElementById('theme-toggle');
+      const html = document.documentElement;
+      
+      // Apply saved theme on load
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        html.classList.add('dark');
+        html.setAttribute('data-theme', 'dark');
+      } else {
+        html.classList.remove('dark');
+        html.removeAttribute('data-theme');
+      }
+      
+      // Theme toggle click handler
+      themeToggle.addEventListener('click', () => {
+        if (html.classList.contains('dark')) {
+          html.classList.remove('dark');
+          html.removeAttribute('data-theme');
+          localStorage.theme = 'light';
+        } else {
+          html.classList.add('dark');
+          html.setAttribute('data-theme', 'dark');
+          localStorage.theme = 'dark';
+        }
+      });
+
+      // Auto-hide navbar on scroll
+      let lastScrollTop = 0;
+      const navbar = document.getElementById('main-navbar');
+      
+      window.addEventListener('scroll', () => {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > lastScrollTop && scrollTop > 100) {
+          // Scrolling down & past 100px
+          navbar.style.transform = 'translateY(-100%)';
+        } else {
+          // Scrolling up
+          navbar.style.transform = 'translateY(0)';
+        }
+        
+        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+      }, false);
+
+      // Sidebar toggle
+      const sidebarToggle = document.getElementById('sidebar-toggle');
+      const sidebar = document.getElementById('sidebar');
+      const sidebarClose = document.getElementById('sidebar-close');
+      const sidebarOverlay = document.getElementById('sidebar-overlay');
+      
+      sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        sidebarOverlay.classList.toggle('show');
+      });
+
+      sidebarClose.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('show');
+      });
+
+      // Close sidebar when clicking overlay
+      sidebarOverlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('show');
+      });
+
+      // Dropdown toggle
+      function toggleDropdown(id) {
+        const dropdown = document.getElementById(id);
+        dropdown.classList.toggle('show');
+        
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d.id !== id) d.classList.remove('show');
+        });
+      }
+
+      // Close dropdowns when clicking outside
+      window.onclick = function(event) {
+        if (!event.target.matches('.dropdown button, .dropdown button *')) {
+          document.querySelectorAll('.dropdown-content').forEach(d => {
+            d.classList.remove('show');
+          });
+        }
+      }
+
+      // Load competitions on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        loadCompetitions();
+        loadTrending();
+        setupVoteStream();
+      });
+
+      function setupVoteStream() {
+        const eventSource = new EventSource('/api/user/vote-stream');
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'connected') {
+              console.log('Connected to vote stream');
+            } else if (data.competition_id) {
+              console.log('Vote update received');
+              loadCompetitions();
+              loadTrending();
+            }
+          } catch (error) {
+            console.error('Error parsing SSE data:', error);
+          }
+        };
+        
+        eventSource.onerror = (error) => {
+          console.error('SSE connection error:', error);
+          eventSource.close();
+          setTimeout(setupVoteStream, 5000);
+        };
+      }
+
+      async function loadCompetitions() {
+        const grid = document.getElementById('competitions-grid');
+        const loading = document.getElementById('loading');
+        const noResults = document.getElementById('no-results');
+        
+        loading.classList.remove('hidden');
+        grid.innerHTML = '';
+        noResults.classList.add('hidden');
+        
+        try {
+          console.log('Fetching competitions...');
+          const response = await fetch('/api/competitions', {
+            credentials: 'same-origin'
+          });
+          console.log('Response status:', response.status);
+          if (!response.ok) throw new Error(`Failed to load: ${response.status}`);
+          
+          const data = await response.json();
+          console.log('Data received:', data);
+          allCompetitions = Array.isArray(data) ? data : (data.competitions || []);
+          allTags = Array.isArray(data) ? [] : (data.all_tags || []);
+          
+          console.log('Competitions count:', allCompetitions.length);
+          
+          // Populate tag filter
+          const tagFilter = document.getElementById('tag-filter');
+          tagFilter.innerHTML = '<option value="">All Categories</option>';
+          allTags.forEach(tag => {
+            tagFilter.innerHTML += `<option value="${tag}">${tag}</option>`;
+          });
+          
+          renderCompetitions(allCompetitions);
+        } catch (error) {
+          console.error('Error loading competitions:', error);
+          grid.innerHTML = '<p class="text-red-500 text-center py-8">Error loading competitions: ' + error.message + '</p>';
+        } finally {
+          loading.classList.add('hidden');
+        }
+      }
+
+      function renderCompetitions(competitions) {
+        const grid = document.getElementById('competitions-grid');
+        const noResults = document.getElementById('no-results');
+        
+        if (competitions.length === 0) {
+          noResults.classList.remove('hidden');
+          grid.innerHTML = '';
+          return;
+        }
+        
+        noResults.classList.add('hidden');
+        grid.innerHTML = competitions.map(comp => {
+          const votesA = comp.votes_a || 0;
+          const votesB = comp.votes_b || 0;
+          const total = votesA + votesB;
+          const percA = total > 0 ? ((votesA / total) * 100).toFixed(1) : 50;
+          const percB = total > 0 ? ((votesB / total) * 100).toFixed(1) : 50;
+          
+          const tags = comp.tags || [];
+          const tagsHtml = tags.map(tag => 
+            `<span class="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-xs px-1.5 py-0.5 rounded-full">${tag}</span>`
+          ).join('');
+          
+          return `
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition overflow-hidden aspect-square flex flex-col">
+              <!-- Image Section (45% of card) -->
+              <div class="h-[45%] bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
+                ${comp.image_url ? `<img src="${comp.image_url}" class="w-full h-full object-cover" alt="${comp.name}">` : `<i class="fas fa-trophy text-white text-5xl"></i>`}
+              </div>
+              
+              <!-- Content Section (55% of card) -->
+              <div class="h-[55%] p-3 flex flex-col justify-between">
+                <!-- Title & Tags -->
+                <div>
+                  <h3 class="font-bold text-base text-gray-900 dark:text-gray-100 line-clamp-1 mb-1.5">${comp.name}</h3>
+                  ${tagsHtml ? `<div class="flex flex-wrap gap-1 mb-2">${tagsHtml}</div>` : '<div class="mb-1"></div>'}
+                </div>
+                
+                <!-- Voting Options -->
+                <div class="space-y-1.5 flex-1">
+                  <button onclick="vote(${comp.id}, 'a')" class="w-full text-left px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition">
+                    <div class="flex justify-between items-center mb-0.5">
+                      <span class="font-semibold text-sm text-blue-900 dark:text-blue-100 truncate pr-2">${comp.option_a}</span>
+                      <span class="text-sm font-bold text-blue-600 dark:text-blue-400">${percA}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                      <div class="bg-blue-600 h-1.5 rounded-full transition-all" style="width: ${percA}%"></div>
+                    </div>
+                    <span class="text-xs text-gray-600 dark:text-gray-400">${votesA} votes</span>
+                  </button>
+                  
+                  <button onclick="vote(${comp.id}, 'b')" class="w-full text-left px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 transition">
+                    <div class="flex justify-between items-center mb-0.5">
+                      <span class="font-semibold text-sm text-red-900 dark:text-red-100 truncate pr-2">${comp.option_b}</span>
+                      <span class="text-sm font-bold text-red-600 dark:text-red-400">${percB}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                      <div class="bg-red-600 h-1.5 rounded-full transition-all" style="width: ${percB}%"></div>
+                    </div>
+                    <span class="text-xs text-gray-600 dark:text-gray-400">${votesB} votes</span>
+                  </button>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex gap-2 mt-2">
+                  <button onclick="toggleFavorite(${comp.id})" class="flex-1 px-3 py-2 rounded-lg ${comp.is_favorite ? 'bg-yellow-500 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300'} hover:opacity-80 transition text-sm">
+                    <i class="fas fa-star"></i>
+                  </button>
+                  <button onclick="openCommentModal(${comp.id}, '${comp.name.replace(/'/g, "\\'")}', ${comp.comments_count || 0})" class="flex-1 px-3 py-2 rounded-lg bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-600 transition text-sm">
+                    <i class="fas fa-comment"></i> ${comp.comments_count || 0}
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      async function loadTrending() {
+        const trendingList = document.getElementById('trending-list');
+        
+        try {
+          const response = await fetch('/api/user/trending');
+          if (!response.ok) throw new Error('Failed');
+          
+          const trending = await response.json();
+          
+          if (trending.length === 0) {
+            trendingList.innerHTML = '<p class="text-gray-500 text-sm">No trending competitions</p>';
+            return;
+          }
+          
+          trendingList.innerHTML = trending.map((comp, index) => `
+            <div class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition cursor-pointer">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center font-bold text-sm">
+                ${index + 1}
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">${comp.name}</h4>
+                <p class="text-xs text-gray-600 dark:text-gray-400">
+                  <i class="fas fa-fire text-orange-500"></i> ${comp.trending_score} | 
+                  <i class="fas fa-users text-blue-500"></i> ${comp.participant_count || 0} participants
+                </p>
+              </div>
+            </div>
+          `).join('');
+        } catch (error) {
+          trendingList.innerHTML = '<p class="text-gray-500 text-sm">Error loading trending</p>';
+          console.error(error);
+        }
+      }
+
+      async function vote(compId, option) {
+        try {
+          const response = await fetch(`/vote/${compId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `vote=${option}`
+          });
+          
+          if (!response.ok) throw new Error('Failed to vote');
+          
+          // Reload competitions to show updated votes
+          loadCompetitions();
+          loadTrending();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function toggleFavorite(compId) {
+        try {
+          const response = await fetch(`/api/user/favorites/${compId}`, {
+            method: 'POST'
+          });
+          
+          if (!response.ok) throw new Error('Failed');
+          
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      function openCommentModal(compId, compName, commentCount) {
+        currentCompetitionId = compId;
+        document.getElementById('modal-comp-name').textContent = `${compName} (${commentCount} comments)`;
+        document.getElementById('comment-modal').classList.remove('hidden');
+        loadComments(compId);
+      }
+
+      document.getElementById('close-comment-modal').addEventListener('click', () => {
+        document.getElementById('comment-modal').classList.add('hidden');
+        currentCompetitionId = null;
+      });
+
+      async function loadComments(compId) {
+        const commentsList = document.getElementById('comments-list');
+        commentsList.innerHTML = '<p class="text-gray-500 text-center py-4">Loading...</p>';
+        
+        try {
+          const response = await fetch(`/api/user/competitions/${compId}/comments`);
+          if (!response.ok) throw new Error('Failed');
+          
+          const comments = await response.json();
+          
+          if (comments.length === 0) {
+            commentsList.innerHTML = '<p class="text-gray-500 text-center py-4">No comments yet. Be the first!</p>';
+            return;
+          }
+          
+          commentsList.innerHTML = comments.map(comment => `
+            <div class="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="font-semibold text-gray-900 dark:text-gray-100">${comment.username}</span>
+                  <span class="text-xs text-gray-500 ml-2">${new Date(comment.created_at).toLocaleDateString()}</span>
+                </div>
+                <button onclick="likeComment(${comment.id})" class="text-sm ${comment.user_liked ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 transition">
+                  <i class="fas fa-heart"></i> ${comment.likes_count || 0}
+                </button>
+              </div>
+              <p class="text-gray-700 dark:text-gray-300">${comment.comment_text}</p>
+            </div>
+          `).join('');
+        } catch (error) {
+          commentsList.innerHTML = '<p class="text-red-500 text-center py-4">Error loading comments</p>';
+        }
+      }
+
+      async function addComment() {
+        const text = document.getElementById('comment-text').value.trim();
+        if (!text || !currentCompetitionId) return;
+        
+        try {
+          const response = await fetch(`/api/user/competitions/${currentCompetitionId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment_text: text })
+          });
+          
+          if (!response.ok) throw new Error('Failed');
+          
+          document.getElementById('comment-text').value = '';
+          loadComments(currentCompetitionId);
+          loadCompetitions();
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      async function likeComment(commentId) {
+        try {
+          const response = await fetch(`/api/user/comments/${commentId}/like`, {
+            method: 'POST'
+          });
+          
+          if (!response.ok) throw new Error('Failed');
+          
+          loadComments(currentCompetitionId);
+        } catch (error) {
+          alert('Error: ' + error.message);
+        }
+      }
+
+      // Stats Modal
+      function openStatsModal() {
+        document.getElementById('stats-modal').classList.remove('hidden');
+        loadUserStats();
+      }
+
+      document.getElementById('close-stats').addEventListener('click', () => {
+        document.getElementById('stats-modal').classList.add('hidden');
+      });
+
+      async function loadUserStats() {
+        try {
+          const response = await fetch('/api/user/stats');
+          if (!response.ok) throw new Error('Failed to load stats');
+          
+          const stats = await response.json();
+          console.log('Stats loaded:', stats);
+          
+          document.getElementById('stat-votes').textContent = stats.total_votes || 0;
+          document.getElementById('stat-competitions').textContent = stats.competitions_participated || 0;
+          document.getElementById('stat-favorites').textContent = stats.favorites_count || 0;
+          document.getElementById('stat-category').textContent = stats.favorite_category || 'None';
+        } catch (error) {
+          console.error('Error loading stats:', error);
+          alert('Error loading statistics. Please try again.');
+        }
+      }
+
+      // Search and Filter
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        applyFilters();
+      });
+
+      document.getElementById('tag-filter').addEventListener('change', () => {
+        applyFilters();
+      });
+
+      document.getElementById('sort-select').addEventListener('change', () => {
+        applyFilters();
+      });
+
+      function applyFilters() {
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        const selectedTag = document.getElementById('tag-filter').value;
+        const sortBy = document.getElementById('sort-select').value;
+        
+        let filtered = [...allCompetitions];
+        
+        // Search filter
+        if (searchTerm) {
+          filtered = filtered.filter(comp => 
+            comp.name.toLowerCase().includes(searchTerm) ||
+            (comp.description && comp.description.toLowerCase().includes(searchTerm)) ||
+            (comp.tags && comp.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
+          );
+        }
+        
+        // Tag filter
+        if (selectedTag) {
+          filtered = filtered.filter(comp => 
+            comp.tags && comp.tags.includes(selectedTag)
+          );
+        }
+        
+        // Sort
+        if (sortBy === 'popular') {
+          filtered.sort((a, b) => ((b.votes_a || 0) + (b.votes_b || 0)) - ((a.votes_a || 0) + (a.votes_b || 0)));
+        } else if (sortBy === 'trending') {
+          filtered.sort((a, b) => (b.trending_score || 0) - (a.trending_score || 0));
+        } else if (sortBy === 'ending_soon') {
+          filtered.sort((a, b) => {
+            if (!a.scheduled_end) return 1;
+            if (!b.scheduled_end) return -1;
+            return new Date(a.scheduled_end) - new Date(b.scheduled_end);
+          });
+        } else {
+          filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        }
+        
+        renderCompetitions(filtered);
+      }
+
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        loadCompetitions();
+        loadTrending();
+      });
+    </script>
+  </body>
+</html>
